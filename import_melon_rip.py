@@ -120,11 +120,13 @@ def import_rip(rip):
         pos += 4
 
         if op in [b"TRI ", b"QUAD"]:
+            nverts = 3 if op == b"TRI " else 4
+
             if (polygon_attr>>4) & 3 == 3:
                 # Skip shadow volumes; no idea what to do with these
+                pos += (4*3 + 4*3 + 2*2)*nverts
                 continue
 
-            nverts = 3 if op == b"TRI " else 4
             vert_index = len(verts)
             for _ in range(nverts):
                 x, y, z = struct.unpack_from('<3i', dump, offset=pos)
@@ -174,6 +176,9 @@ def import_rip(rip):
             for length in lengths:
                 rip.vram.append(dump[pos:pos + length*1024])
                 pos += length*1024
+
+        else:
+            assert False, "bug: unknown packet"
 
     mesh = bpy.data.meshes.new('Melon Rip')
     mesh.from_pydata(verts, [], faces)
