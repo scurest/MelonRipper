@@ -348,14 +348,14 @@ def create_material(rip, texparam, texpal, polygon_attr):
     )
 
     # Useful for debugging
-    mat['nds:TexParam'] = texparam
-    mat['nds:TexPal'] = texpal
-    mat['nds:PolygonAttr'] = polygon_attr
-    mat['nds:Texture Format'] = texformat
-    mat['nds:Polygon Mode'] = blendmode
-    mat['nds:Polygon Alpha'] = polyalpha
-    mat['nds:Polygon Back Surface'] = (polygon_attr>>6)&1
-    mat['nds:Polygon From Surface'] = (polygon_attr>>7)&1
+    mat['nds:TexParam'] = str(texparam)
+    mat['nds:TexPal'] = str(texpal)
+    mat['nds:PolygonAttr'] = str(polygon_attr)
+    mat['nds:Texture Format'] = str(texformat)
+    mat['nds:Polygon Mode'] = str(blendmode)
+    mat['nds:Polygon Alpha'] = str(polyalpha)
+    mat['nds:Polygon Back Surface'] = str((polygon_attr>>6)&1)
+    mat['nds:Polygon From Surface'] = str((polygon_attr>>7)&1)
 
     return mat
 
@@ -671,8 +671,6 @@ def decode_texture(rip, texparam, texpal):
     img = bpy.data.images.new('NDS Texture', width, height, alpha=not opaque)
     img.pixels[:] = pixels
     img.pack()
-
-    img['nds:Texture Format'] = texformat
 
     return img
 
