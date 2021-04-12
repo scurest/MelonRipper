@@ -69,6 +69,7 @@ class Rip:
         self.dump = dump
         self.material_cache = {}
         self.texture_cache = {}
+        self.toon_table_texture = None
 
 
 def check_magic(rip):
@@ -85,7 +86,7 @@ def check_magic(rip):
         raise ShowErrorMsg('Weird magic in MelonRipper file')
 
     min_version = 1
-    max_version = 1
+    max_version = 2
     if version < min_version:
         raise ShowErrorMsg(
             'MelonRipper file too old; '
@@ -111,6 +112,7 @@ def import_rip(rip):
     texparam = 0
     texpal = 0
     polygon_attr = 0
+    blendmode = 0
     texture_width = 8
     texture_height = 8
 
@@ -136,9 +138,12 @@ def import_rip(rip):
 
                 r, g, b = struct.unpack_from('<3i', dump, offset=pos)
                 pos += 4*3
-                r -= 0xFFF ; g -= 0xFFF ; b -= 0xFFF  # melonDS adds 0xFFF?
-                r *= 2**-12 ; g *= 2**-12; b *= 2**-12
-                colors += [r/31, g/31, b/31, 1.0]
+                # get back to 0-31 range (undo melonDS transform)
+                r = (r - 0xFFF) >> 12
+                g = (g - 0xFFF) >> 12
+                b = (b - 0xFFF) >> 12
+                colors += [r, g, b]
+                colors.append(blendmode == 2)  # remember for later
 
                 s, t = struct.unpack_from('<2h', dump, offset=pos)
                 pos += 2*2
@@ -164,6 +169,7 @@ def import_rip(rip):
 
         elif op == b"PATR":
             polygon_attr, = struct.unpack_from('<I', dump, offset=pos)
+            blendmode = (polygon_attr >> 4) & 3
             pos += 4
 
         elif op == b"VRAM":
@@ -177,12 +183,23 @@ def import_rip(rip):
                 rip.vram.append(dump[pos:pos + length*1024])
                 pos += length*1024
 
+        elif op == b"DISP":
+            rip.disp_cnt, = struct.unpack_from('<I', dump, offset=pos)
+            pos += 4
+
+        elif op == b"TOON":
+            rip.toon_table = struct.unpack_from('<32H', dump, offset=pos)
+            pos += 2*32
+
         else:
             assert False, "bug: unknown packet"
+
+    backwards_compat(rip)
 
     mesh = bpy.data.meshes.new('Melon Rip')
     mesh.from_pydata(verts, [], faces)
 
+    colors = convert_vertex_colors(rip, colors)
     color_layer = mesh.vertex_colors.new()
     color_layer.data.foreach_set('color', colors)
 
@@ -204,6 +221,48 @@ def import_rip(rip):
         bpy.ops.object.select_all(action='DESELECT')
     ob.select_set(True)
     bpy.context.view_layer.objects.active = ob
+
+
+def backwards_compat(rip):
+    # Handle stuff missing from old .dump files
+    if not hasattr(rip, 'disp_cnt'):
+        rip.disp_cnt = 0
+    if not hasattr(rip, 'toon_table'):
+        rip.toon_table = [0xffff] * 32
+
+
+# Precomputed table used for toon mode
+# TOON_INDEX_TABLE[n]/255 is a color that will pick the nth texel
+# when it's the texcoord to a 32x1 texture
+TOON_INDEX_TABLE = [
+    24,  60,  78,  93,  105, 115, 124, 132,
+    140, 148, 155, 161, 167, 173, 179, 185,
+    190, 195, 200, 205, 209, 214, 218, 222,
+    226, 230, 234, 238, 242, 246, 249, 253,
+]
+
+
+def convert_vertex_colors(rip, colors):
+    out = []
+    is_highlight = ((rip.disp_cnt>>1) & 1) == 1
+
+    for i in range(0, len(colors), 4):
+        r = colors[i]
+        g = colors[i+1]
+        b = colors[i+2]
+        is_toon_highlight = colors[i+3]
+
+        if not is_toon_highlight:  # normal mode
+            out += [r/31, g/31, b/31, 1.0]
+
+        elif is_highlight:  # highlight mode
+            out += [r/31, r/31, r/31, 1.0]
+
+        else:  # toon mode
+            c = TOON_INDEX_TABLE[r] / 255
+            out += [c, c, c, 1.0]
+
+    return out
 
 
 # ---------
@@ -338,13 +397,18 @@ def create_material(rip, texparam, texpal, polygon_attr):
         if alpha_socket:
             alpha_socket.default_value = polyalpha / 31
 
-    vcolor = mat.node_tree.nodes.new(type='ShaderNodeVertexColor')
-    vcolor.location = x - 100, 320
-    if tex_img: vcolor.location[0] -= 40
-    vcolor.layer_name = 'Col'
+    loc = x - 100, 320
+    if tex_img:
+        loc = loc[0] - 40, loc[1] + 60
+    vcolor_socket = vertex_color_node(
+        rip=rip,
+        node_tree=mat.node_tree,
+        blendmode=blendmode,
+        location=loc,
+    )
     mat.node_tree.links.new(
         color_socket,
-        vcolor.outputs['Color'],
+        vcolor_socket,
     )
 
     # Useful for debugging
@@ -447,6 +511,31 @@ def texture_node(node_tree, image, repeat_s, repeat_t, flip_s, flip_t, location)
         node_tree.links.new(uv_socket, uv_map.outputs[0])
 
     return tex_img
+
+
+def vertex_color_node(rip, node_tree, blendmode, location):
+    x, y = location
+    shading = (rip.disp_cnt >> 1) & 1
+    is_toon = blendmode == 2 and shading == 0
+
+    if is_toon:
+        toon_tex = node_tree.nodes.new('ShaderNodeTexImage')
+        toon_tex.location = x - 50, y + 100
+        toon_tex.image = get_toon_table_texture(rip)
+        toon_tex.interpolation = 'Closest'
+        toon_tex.extension = 'EXTEND'
+
+        x -= 300
+
+    vcolor = node_tree.nodes.new(type='ShaderNodeVertexColor')
+    vcolor.location = x, y
+    vcolor.layer_name = 'Col'
+
+    if is_toon:
+        node_tree.links.new(toon_tex.inputs[0], vcolor.outputs['Color'])
+        return toon_tex.outputs['Color']
+    else:
+        return vcolor.outputs['Color']
 
 
 def get_material(rip, texparam, texpal, polygon_attr):
@@ -691,6 +780,26 @@ def get_texture(rip, texparam, texpal):
     if img is None:
         img = decode_texture(rip, texparam, texpal)
         rip.texture_cache[cache_key] = img
+    return img
+
+
+def get_toon_table_texture(rip):
+    if rip.toon_table_texture is not None:
+        return rip.toon_table_texture
+
+    pixels = []
+    for i in range(32):
+        c = rip.toon_table[i]
+        r = c & 0x1f
+        g = (c >> 5) & 0x1f
+        b = (c >> 10) & 0x1f
+        pixels += [r/31, g/31, b/31, 1.0]
+
+    img = bpy.data.images.new('NDS ToonTable', 32, 1, alpha=False)
+    img.pixels[:] = pixels
+    img.pack()
+
+    rip.toon_table_texture = img
     return img
 
 

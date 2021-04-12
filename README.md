@@ -100,8 +100,8 @@ to import it.
   The real DS sorts polys, which avoids these issues.
 
 * The material nodes are supposed to simulate a DS pixel pipeline.
-  Implemented effects: texturing, modulate, decal, texcoord wrapping.
-  Unimplemented: fog, toon, shadow, wireframe.
+  Implemented effects: texturing, modulate, decal, toon, texcoord wrapping.
+  Unimplemented: fog, shadow, wireframe.
 
 * Exporting to .gltf sort of works (use Blender ≥2.92 for the latest fixes).
   Exporting to .dae or .fbx loses the materials.
