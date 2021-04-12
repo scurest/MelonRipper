@@ -663,6 +663,7 @@ def decode_texture(rip, texparam, texpal):
                 slot1addr = 0x20000 + ((addr & 0x1FFFC) >> 1)
                 if addr >= 0x40000:
                     slot1addr += 0x10000
+
                 val = read_vram_texture_u8(rip, addr)
                 val >>= 2 * (s&3)
 
@@ -679,26 +680,40 @@ def decode_texture(rip, texparam, texpal):
                     alpha.append(31)
 
                 elif mode == 2:
-                    col0 = read_vram_texpal_u16(rip, texpal+paloffset)
-                    col1 = read_vram_texpal_u16(rip, texpal+paloffset+2)
-
-                    r0 = col0 & 0x001F
-                    g0 = col0 & 0x03E0
-                    b0 = col0 & 0x7C00
-                    r1 = col1 & 0x001F
-                    g1 = col1 & 0x03E0
-                    b1 = col1 & 0x7C00
-
                     if (palinfo >> 14) == 1:
+                        col0 = read_vram_texpal_u16(rip, texpal+paloffset)
+                        col1 = read_vram_texpal_u16(rip, texpal+paloffset+2)
+
+                        r0 = col0 & 0x001F
+                        g0 = col0 & 0x03E0
+                        b0 = col0 & 0x7C00
+                        r1 = col1 & 0x001F
+                        g1 = col1 & 0x03E0
+                        b1 = col1 & 0x7C00
+
                         r = (r0 + r1) >> 1
                         g = ((g0 + g1) >> 1) & 0x03E0
                         b = ((b0 + b1) >> 1) & 0x7C00
-                    else:
+
+                        color.append(r|g|b)
+                    elif (palinfo >> 14) == 3:
+                        col0 = read_vram_texpal_u16(rip, texpal+paloffset)
+                        col1 = read_vram_texpal_u16(rip, texpal+paloffset+2)
+
+                        r0 = col0 & 0x001F
+                        g0 = col0 & 0x03E0
+                        b0 = col0 & 0x7C00
+                        r1 = col1 & 0x001F
+                        g1 = col1 & 0x03E0
+                        b1 = col1 & 0x7C00
+
                         r = (r0*5 + r1*3) >> 3
                         g = ((g0*5 + g1*3) >> 3) & 0x03E0
                         b = ((b0*5 + b1*3) >> 3) & 0x7C00
 
-                    color.append(r|g|b)
+                        color.append(r|g|b)
+                    else:
+                        color.append(read_vram_texpal_u16(rip, texpal+paloffset+4))
                     alpha.append(31)
 
                 else:
