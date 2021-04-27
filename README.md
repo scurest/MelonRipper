@@ -34,7 +34,7 @@ Again, see the ReadMe for how that works.
 
 Okay, so you've got your patched melonDS running now.
 The patch will have added a new hotkey for ripping a frame.
-Go to _Config ‣ Input and hotkeys ‣ Addons_
+Go to _Config ‣ Input and hotkeys ‣ Add-ons_
 and assign a hotkey to "[MelonRipper] Rip"
 (I used [F]).
 
@@ -81,7 +81,7 @@ to import it.
   but before the Projection.)
 
 * Normals aren't ripped.
-  Any lighting is baked into the vertex colors.
+  The calculated lighting from normals is baked into the vertex colors.
 
 * Strip connectivity is not preserved.
   All faces in Blender are totally separate from each other,
@@ -95,14 +95,13 @@ to import it.
   has a great explanation for this.
 
 * Translucent (partially transparent) faces are imported with "Alpha Blend".
-  If you have sorting issues, try switching to "Alpha Hashed"
-  for noisy but order-independent translucency instead.
-  The real DS sorts polys, which avoids these issues.
+  This may have sorting problems in the Eevee renderer.
+  If you have sorting issues, try Cycles.
 
 * The material nodes are supposed to simulate a DS pixel pipeline.
   Implemented effects: texturing, modulate, decal, toon, texcoord wrapping.
-  Unimplemented: fog, shadow, wireframe.
+  Unimplemented: fog, shadow, wireframe, edgemarking, depth equal, rear plane.
 
-* Exporting to .gltf sort of works (use Blender ≥2.92 for the latest fixes).
+* Exporting to .gltf sort of works (use Blender ≥2.92 for best results).
   Exporting to .dae or .fbx loses the materials.
   Exporting to .obj loses the materials and the vertex colors!
