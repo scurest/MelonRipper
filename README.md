@@ -28,6 +28,11 @@ Fetch the branch [scurest:MelonRipper](https://github.com/scurest/melonDS/tree/M
 and build it normally.
 Build instructions are in melonDS's ReadMe.
 
+<table><tbody><tr><td>
+For Windows users, you can also download a
+<a href="https://github.com/scurest/melonDS/releases/tag/MelonRipperBuild">precompiled EXE</a>.
+</td></tr></tbody></table>
+
 melonDS requires firmware to run games
 so make sure that's installed.
 Again, see the ReadMe for how that works.
