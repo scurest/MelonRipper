@@ -177,11 +177,18 @@ def import_rip(rip):
             pos += 4*4
             rip.vram_map_texpal = struct.unpack_from('<8I', dump, offset=pos)
             pos += 4*8
-            rip.vram = []
-            lengths = [ 128, 128, 128, 128, 64, 16, 16 ]
-            for length in lengths:
-                rip.vram.append(dump[pos:pos + length*1024])
-                pos += length*1024
+
+            banks = []
+            # Banks A-D, 128K each
+            for i in range(4):
+                banks.append(dump[pos : pos + (128 << 10)])
+                pos += 128 << 10
+            # Banks E-G, E is 64K, F-G are 16K
+            for i in range(6):
+                banks.append(dump[pos : pos + (16 << 10)])
+                pos += 16 << 10
+
+            load_vram(rip, banks)
 
         elif op == b"DISP":
             rip.disp_cnt, = struct.unpack_from('<I', dump, offset=pos)
@@ -221,6 +228,32 @@ def import_rip(rip):
         bpy.ops.object.select_all(action='DESELECT')
     ob.select_set(True)
     bpy.context.view_layer.objects.active = ob
+
+
+def load_vram(rip, banks):
+    vram_tex = bytearray()
+    vram_pal = bytearray()
+
+    for i in range(4):
+        mask = rip.vram_map_texture[i]
+        if mask & (1 << 0): vram_tex += banks[0]
+        elif mask & (1 << 1): vram_tex += banks[1]
+        elif mask & (1 << 2): vram_tex += banks[2]
+        elif mask & (1 << 3): vram_tex += banks[3]
+        else: vram_tex += b"\0" * (128 << 10)
+
+    for i in range(8):
+        mask = rip.vram_map_texpal[i]
+        if mask & (1 << 4): vram_pal += banks[4 + (i & 3)]
+        elif mask & (1 << 5): vram_pal += banks[8]
+        elif mask & (1 << 6): vram_pal += banks[9]
+        else: vram_pal += b"\0" * (16 << 10)
+
+    # Decode palette VRAM to u16s right away since its only read as u16s
+    vram_pal = struct.unpack("<%dH" % (len(vram_pal) // 2), vram_pal)
+
+    rip.vram_tex = vram_tex
+    rip.vram_pal = vram_pal
 
 
 def backwards_compat(rip):
@@ -552,52 +585,18 @@ def get_material(rip, texparam, texpal, polygon_attr):
 # --------
 
 def read_vram_texture_u8(rip, addr):
-    ret = 0
-    mask = rip.vram_map_texture[(addr >> 17) & 3]
-
-    if mask & 1: ret |= rip.vram[0][addr & 0x1ffff]
-    if mask & 2: ret |= rip.vram[1][addr & 0x1ffff]
-    if mask & 4: ret |= rip.vram[2][addr & 0x1ffff]
-    if mask & 8: ret |= rip.vram[3][addr & 0x1ffff]
-
-    return ret
+    return rip.vram_tex[addr & 0x7FFFF]
 
 
 def read_vram_texture_u16(rip, addr):
-    ret = 0
-    mask = rip.vram_map_texture[(addr >> 17) & 3]
-
-    if mask & 1:
-        ret |= rip.vram[0][addr & 0x1ffff]
-        ret |= rip.vram[0][(addr & 0x1ffff)+1] << 8
-    if mask & 2:
-        ret |= rip.vram[1][addr & 0x1ffff]
-        ret |= rip.vram[1][(addr & 0x1ffff)+1] << 8
-    if mask & 4:
-        ret |= rip.vram[2][addr & 0x1ffff]
-        ret |= rip.vram[2][(addr & 0x1ffff)+1] << 8
-    if mask & 8:
-        ret |= rip.vram[3][addr & 0x1ffff]
-        ret |= rip.vram[3][(addr & 0x1ffff)+1] << 8
-
-    return ret
+    return (
+        rip.vram_tex[addr & 0x7FFFF] |
+        (rip.vram_tex[(addr+1) & 0x7FFFF] << 8)
+    )
 
 
 def read_vram_texpal_u16(rip, addr):
-    ret = 0
-    mask = rip.vram_map_texpal[(addr >> 14) & 7]
-
-    if mask & 16:
-        ret |= rip.vram[4][addr & 0xFFFF]
-        ret |= rip.vram[4][(addr & 0xFFFF) + 1] << 8
-    if mask & 32:
-        ret |= rip.vram[5][addr & 0x3FFF]
-        ret |= rip.vram[5][(addr & 0x3FFF) + 1] << 8
-    if mask & 64:
-        ret |= rip.vram[6][addr & 0x3FFF]
-        ret |= rip.vram[6][(addr & 0x3FFF) + 1] << 8
-
-    return ret
+    return rip.vram_pal[(addr >> 1) & 0xFFFF]
 
 
 def decode_texture(rip, texparam, texpal):
