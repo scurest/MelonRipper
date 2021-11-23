@@ -584,23 +584,7 @@ def get_material(rip, texparam, texpal, polygon_attr):
 # Textures
 # --------
 
-def read_vram_texture_u8(rip, addr):
-    return rip.vram_tex[addr & 0x7FFFF]
-
-
-def read_vram_texture_u16(rip, addr):
-    return (
-        rip.vram_tex[addr & 0x7FFFF] |
-        (rip.vram_tex[(addr+1) & 0x7FFFF] << 8)
-    )
-
-
-def read_vram_texpal_u16(rip, addr):
-    return rip.vram_pal[(addr >> 1) & 0xFFFF]
-
-
 def decode_texture(rip, texparam, texpal):
-    # SLOW: texel fetching in Python is reallly slow (especially format 5)
     color = []
     alpha = []
 
@@ -610,164 +594,185 @@ def decode_texture(rip, texparam, texpal):
     alpha0 = 0 if (texparam & (1<<29)) else 31
     texformat = (texparam >> 26) & 7
 
+    vram_tex = rip.vram_tex
+    vram_pal = rip.vram_pal
+
     if texformat == 1:  # A3I5
-        texpal <<= 4
-        for t in reversed(range(height)):  # reverse T direction so textures are right-side up
-            for s in range(width):
-                addr = vramaddr + (t*width)+s
-                pixel = read_vram_texture_u8(rip, addr)
-                color.append(read_vram_texpal_u16(rip, texpal + ((pixel&0x1F)<<1)))
-                alpha.append( ((pixel>>3) & 0x1C) + (pixel>>6) )
-
-    elif texformat == 2:  # 4-color
         texpal <<= 3
-        for t in reversed(range(height)):
-            for s in range(width):
-                addr = vramaddr + (((t*width)+s)>>2)
-                pixel = read_vram_texture_u8(rip, addr)
-                pixel >>= (s & 3) << 1
-                pixel &= 3
-
-                color.append(read_vram_texpal_u16(rip, texpal + (pixel<<1)))
-                alpha.append(alpha0 if pixel==0 else 31)
-
-    elif texformat == 3:  # 16-color
-        texpal <<= 4
-        for t in reversed(range(height)):
-            for s in range(width):
-                addr = vramaddr + (((t*width)+s)>>1)
-                pixel = read_vram_texture_u8(rip, addr)
-                pixel = (pixel>>4) if (s&1) else (pixel&0xf)
-
-                color.append(read_vram_texpal_u16(rip, texpal + (pixel<<1)))
-                alpha.append(alpha0 if pixel==0 else 31)
-
-    elif texformat == 4:  # 256-color
-        texpal <<= 4
-        for t in reversed(range(height)):
-            for s in range(width):
-                addr = vramaddr + ((t*width)+s)
-                pixel = read_vram_texture_u8(rip, addr)
-
-                color.append(read_vram_texpal_u16(rip, texpal + (pixel<<1)))
-                alpha.append(alpha0 if pixel==0 else 31)
-
-    elif texformat == 5:  # compressed
-        texpal <<= 4
-        for t in reversed(range(height)):
-            for s in range(width):
-                addr = vramaddr + ((t & 0x3FC) * (width>>2)) + (s & 0x3FC)
-                addr += t & 3
-
-                slot1addr = 0x20000 + ((addr & 0x1FFFC) >> 1)
-                if addr >= 0x40000:
-                    slot1addr += 0x10000
-
-                val = read_vram_texture_u8(rip, addr)
-                val >>= 2 * (s&3)
-
-                palinfo = read_vram_texture_u16(rip, slot1addr)
-                paloffset = (palinfo & 0x3FFF) << 2
-
-                mode = val & 3
-                if mode == 0:
-                    color.append(read_vram_texpal_u16(rip, texpal + paloffset))
-                    alpha.append(31)
-
-                elif mode == 1:
-                    color.append(read_vram_texpal_u16(rip, texpal + paloffset + 2))
-                    alpha.append(31)
-
-                elif mode == 2:
-                    if (palinfo >> 14) == 1:
-                        col0 = read_vram_texpal_u16(rip, texpal+paloffset)
-                        col1 = read_vram_texpal_u16(rip, texpal+paloffset+2)
-
-                        r0 = col0 & 0x001F
-                        g0 = col0 & 0x03E0
-                        b0 = col0 & 0x7C00
-                        r1 = col1 & 0x001F
-                        g1 = col1 & 0x03E0
-                        b1 = col1 & 0x7C00
-
-                        r = (r0 + r1) >> 1
-                        g = ((g0 + g1) >> 1) & 0x03E0
-                        b = ((b0 + b1) >> 1) & 0x7C00
-
-                        color.append(r|g|b)
-                    elif (palinfo >> 14) == 3:
-                        col0 = read_vram_texpal_u16(rip, texpal+paloffset)
-                        col1 = read_vram_texpal_u16(rip, texpal+paloffset+2)
-
-                        r0 = col0 & 0x001F
-                        g0 = col0 & 0x03E0
-                        b0 = col0 & 0x7C00
-                        r1 = col1 & 0x001F
-                        g1 = col1 & 0x03E0
-                        b1 = col1 & 0x7C00
-
-                        r = (r0*5 + r1*3) >> 3
-                        g = ((g0*5 + g1*3) >> 3) & 0x03E0
-                        b = ((b0*5 + b1*3) >> 3) & 0x7C00
-
-                        color.append(r|g|b)
-                    else:
-                        color.append(read_vram_texpal_u16(rip, texpal+paloffset+4))
-                    alpha.append(31)
-
-                else:
-                    if (palinfo >> 14) == 2:
-                        color.append(read_vram_texpal_u16(rip, texpal+paloffset+6))
-                        alpha.append(31)
-                    elif (palinfo >> 14) == 3:
-                        col0 = read_vram_texpal_u16(rip, texpal+paloffset)
-                        col1 = read_vram_texpal_u16(rip, texpal+paloffset+2)
-
-                        r0 = col0 & 0x001F
-                        g0 = col0 & 0x03E0
-                        b0 = col0 & 0x7C00
-                        r1 = col1 & 0x001F
-                        g1 = col1 & 0x03E0
-                        b1 = col1 & 0x7C00
-
-                        r = (r0*3 + r1*5) >> 3
-                        g = ((g0*3 + g1*5) >> 3) & 0x03E0
-                        b = ((b0*3 + b1*5) >> 3) & 0x7C00
-
-                        color.append(r|g|b)
-                        alpha.append(31)
-                    else:
-                        color.append(0)
-                        alpha.append(0)
+        for addr in range(vramaddr, vramaddr + width*height):
+            pixel = vram_tex[addr & 0x7FFFF]
+            color.append(vram_pal[( texpal + (pixel&0x1F) ) & 0xFFFF])
+            alpha.append( ((pixel>>3) & 0x1C) + (pixel>>6) )
 
     elif texformat == 6:  # A5I3
-        texpal <<= 4
-        for t in reversed(range(height)):
-            for s in range(width):
-                addr = vramaddr + (t*width)+s
-                pixel = read_vram_texture_u8(rip, addr)
-                color.append(read_vram_texpal_u16(rip, texpal + ((pixel&7)<<1)))
-                alpha.append(pixel>>3)
+        texpal <<= 3
+        for addr in range(vramaddr, vramaddr + width*height):
+            pixel = vram_tex[addr & 0x7FFFF]
+            color.append(vram_pal[( texpal + (pixel&0x7) ) & 0xFFFF])
+            alpha.append(pixel>>3)
+
+    elif texformat == 2:  # 4-color
+        texpal <<= 2
+        for addr in range(vramaddr, vramaddr + width*height//4):
+            pixelx4 = vram_tex[addr & 0x7FFFF]
+            p0 = pixelx4 & 0x3
+            p1 = (pixelx4 >> 2) & 0x3
+            p2 = (pixelx4 >> 4) & 0x3
+            p3 = pixelx4 >> 6
+
+            color.append(vram_pal[( texpal + p0 ) & 0xFFFF])
+            color.append(vram_pal[( texpal + p1 ) & 0xFFFF])
+            color.append(vram_pal[( texpal + p2 ) & 0xFFFF])
+            color.append(vram_pal[( texpal + p3 ) & 0xFFFF])
+
+            alpha.append(alpha0 if p0==0 else 31)
+            alpha.append(alpha0 if p1==0 else 31)
+            alpha.append(alpha0 if p2==0 else 31)
+            alpha.append(alpha0 if p3==0 else 31)
+
+    elif texformat == 3:  # 16-color
+        texpal <<= 3
+        for addr in range(vramaddr, vramaddr + width*height//2):
+            pixelx2 = vram_tex[addr & 0x7FFFF]
+            p0 = pixelx2 & 0xF
+            p1 = pixelx2 >> 4
+
+            color.append(vram_pal[( texpal + p0 ) & 0xFFFF])
+            color.append(vram_pal[( texpal + p1 ) & 0xFFFF])
+
+            alpha.append(alpha0 if p0==0 else 31)
+            alpha.append(alpha0 if p1==0 else 31)
+
+    elif texformat == 4:  # 256-color
+        texpal <<= 3
+        for addr in range(vramaddr, vramaddr + width*height):
+            pixel = vram_tex[addr & 0x7FFFF]
+            color.append(vram_pal[( texpal + pixel ) & 0xFFFF])
+            alpha.append(alpha0 if pixel==0 else 31)
 
     elif texformat == 7:  # direct color
-        for t in reversed(range(height)):
-            for s in range(width):
-                addr = vramaddr + (((t*width)+s) << 1)
-                pixel = read_vram_texture_u16(rip, addr)
-                color.append(pixel)
-                alpha.append(31 if (pixel & 0x8000) else 0)
+        for addr in range(vramaddr, vramaddr + width*height*2, 2):
+            pixel = rip.vram_tex[addr & 0x7FFFF]
+            pixel |= rip.vram_tex[(addr+1) & 0x7FFFF] << 8
+            color.append(pixel)
+            alpha.append(31 if (pixel & 0x8000) else 0)
+
+    elif texformat == 5:  # compressed
+        color = [0] * (width * height)
+        alpha = [0] * (width * height)
+        block_color = [0, 0, 0, 0]
+        block_alpha = [31, 31, 31, 31]
+        x_ofs = 0
+        y_ofs = 0
+
+        texpal <<= 3
+
+        for addr in range(vramaddr, vramaddr + width*height//4, 4):
+
+            # Read slot1 data for this block
+
+            slot1addr = 0x20000 + ((addr & 0x1FFFC) >> 1)
+            if addr >= 0x40000:
+                slot1addr += 0x10000
+
+            palinfo = vram_tex[slot1addr & 0x7FFFF]
+            palinfo |= vram_tex[(slot1addr + 1) & 0x7FFFF] << 8
+            paloffset = texpal + ((palinfo & 0x3FFF) << 1)
+            palmode = palinfo >> 14
+
+            # Calculate block CLUT
+
+            col0 = vram_pal[( paloffset ) & 0xFFFF]
+            col1 = vram_pal[( paloffset + 1 ) & 0xFFFF]
+            block_color[0] = col0
+            block_color[1] = col1
+            block_alpha[3] = 31 if palmode >= 2 else 0
+
+            if palmode == 0:
+                block_color[2] = vram_pal[( paloffset + 2 ) & 0xFFFF]
+                block_color[3] = 0
+
+            elif palmode == 2:
+                block_color[2] = vram_pal[( paloffset + 2 ) & 0xFFFF]
+                block_color[3] = vram_pal[( paloffset + 3 ) & 0xFFFF]
+
+            elif palmode == 1:
+                r0 = col0 & 0x001F
+                g0 = col0 & 0x03E0
+                b0 = col0 & 0x7C00
+                r1 = col1 & 0x001F
+                g1 = col1 & 0x03E0
+                b1 = col1 & 0x7C00
+
+                r2 = (r0 + r1) >> 1
+                g2 = ((g0 + g1) >> 1) & 0x03E0
+                b2 = ((b0 + b1) >> 1) & 0x7C00
+
+                block_color[2] = r2 | g2 | b2
+                block_color[3] = 0
+
+            else:
+                r0 = col0 & 0x001F
+                g0 = col0 & 0x03E0
+                b0 = col0 & 0x7C00
+                r1 = col1 & 0x001F
+                g1 = col1 & 0x03E0
+                b1 = col1 & 0x7C00
+
+                r2 = (r0*5 + r1*3) >> 3
+                g2 = ((g0*5 + g1*3) >> 3) & 0x03E0
+                b2 = ((b0*5 + b1*3) >> 3) & 0x7C00
+
+                r3 = (r0*3 + r1*5) >> 3
+                g3 = ((g0*3 + g1*5) >> 3) & 0x03E0
+                b3 = ((b0*3 + b1*5) >> 3) & 0x7C00
+
+                block_color[2] = r2 | g2 | b2
+                block_color[3] = r3 | g3 | b3
+
+            # Read block of 4x4 pixels at addr
+            # 2bpp indices into the CLUT
+
+            for y in range(4):
+                ofs = y_ofs + y*width + x_ofs
+
+                pixelx4 = vram_tex[(addr + y) & 0x7FFFF]
+
+                p0 = pixelx4 & 0x3
+                p1 = (pixelx4 >> 2) & 0x3
+                p2 = (pixelx4 >> 4) & 0x3
+                p3 = pixelx4 >> 6
+
+                color[ofs] = block_color[p0]
+                color[ofs+1] = block_color[p1]
+                color[ofs+2] = block_color[p2]
+                color[ofs+3] = block_color[p3]
+
+                alpha[ofs] = block_alpha[p0]
+                alpha[ofs+1] = block_alpha[p1]
+                alpha[ofs+2] = block_alpha[p2]
+                alpha[ofs+3] = block_alpha[p3]
+
+            # Advance to next block position
+
+            x_ofs += 4
+            if x_ofs == width:
+                x_ofs = 0
+                y_ofs += 4*width
 
     else:
         return None
 
     # Decode to floats
+    # Also reverse the rows so the image is right-side-up
     pixels = []
-    for i in range(len(color)):
-        c, a = color[i], alpha[i]
-        r = c & 0x1f
-        g = (c >> 5) & 0x1f
-        b = (c >> 10) & 0x1f
-        pixels += [r/31, g/31, b/31, a/31]
+    for t in reversed(range(height)):
+        for i in range(t*width, (t+1)*width):
+            c, a = color[i], alpha[i]
+            r = c & 0x1f
+            g = (c >> 5) & 0x1f
+            b = (c >> 10) & 0x1f
+            pixels += [r/31, g/31, b/31, a/31]
 
     opaque = all(a == 31 for a in alpha)
 
