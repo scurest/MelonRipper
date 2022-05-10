@@ -110,3 +110,5 @@ to import it.
 * Exporting to .gltf sort of works (use Blender ≥2.92 for best results).
   Exporting to .dae or .fbx loses the materials.
   Exporting to .obj loses the materials and the vertex colors!
+
+- Request in comment
