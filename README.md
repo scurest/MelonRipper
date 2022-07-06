@@ -108,5 +108,4 @@ to import it.
   Unimplemented: fog, shadow, wireframe, edgemarking, depth equal, rear plane.
 
 * Exporting to .gltf sort of works (use Blender ≥2.92 for best results).
-  Exporting to .dae or .fbx loses the materials.
-  Exporting to .obj loses the materials and the vertex colors!
+  You will probably need to modify the materials to export to other formats.
