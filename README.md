@@ -33,10 +33,6 @@ For Windows users, you can also download a
 <a href="https://github.com/scurest/melonDS/releases/tag/MelonRipperBuild">precompiled EXE</a>.
 </td></tr></tbody></table>
 
-melonDS requires firmware to run games
-so make sure that's installed.
-Again, see the ReadMe for how that works.
-
 Okay, so you've got your patched melonDS running now.
 The patch will have added a new hotkey for ripping a frame.
 Go to _Config ‣ Input and hotkeys ‣ Add-ons_
