@@ -23,57 +23,59 @@ and a Blender addon for importing them.
 
 ### melonDS
 
-First, you need to compile the patched melonDS.
-Fetch the branch [scurest:MelonRipper](https://github.com/scurest/melonDS/tree/MelonRipper)
-and build it normally.
+First, you need to build the patched melonDS.
+Windows users can download a
+[precompiled EXE](https://github.com/scurest/melonDS/releases/tag/MelonRipperBuild).
+Otherwise, compile the
+[scurest:MelonRipper branch](https://github.com/scurest/melonDS/tree/MelonRipper)
+from my copy of melonDS.
 Build instructions are in melonDS's ReadMe.
 
-<table><tbody><tr><td>
-For Windows users, you can also download a
-<a href="https://github.com/scurest/melonDS/releases/tag/MelonRipperBuild">precompiled EXE</a>.
-</td></tr></tbody></table>
-
-Okay, so you've got your patched melonDS running now.
-The patch will have added a new hotkey for ripping a frame.
+Open the emulator.
+There should be a new hotkey for ripping a frame.
 Go to _Config ‣ Input and hotkeys ‣ Add-ons_
 and assign a hotkey to "[MelonRipper] Rip"
 (I used [F]).
 
 <img src="imgs/melonDSHotkeys.png">
 
-Then when you are playing a game
-press your hotkey to rip everything drawn on the next frame.
-The rip is saved to a file named like
-`melonrip-YYYY-MM-DD-HH-MM-SS.dump`
+Now when you're playing a game
+you can press the hotkey
+to rip the next frame to a `.dump` file
 in the current directory.
 
 ### Blender
 
-You'll need Blender 2.82 or later.
+Blender 2.82 or later is required.
 
-Install the [`import_melon_rip.py`](import_melon_rip.py) file
-through _Edit ‣ Preferences ‣ Add-ons ‣ Install..._
-and enable the addon "Import: MelonRipper NDS Dumps".
-(See the [Blender Manual](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons)
-or [this question](https://blender.stackexchange.com/questions/1688/installing-an-addon/1689)
-if you need help installing addons.)
+To install the addon, open
+[`import_melon_rip.py`](https://raw.githubusercontent.com/scurest/MelonRipper/master/import_melon_rip.py)
+and save it to your computer.
+Then in Blender,
+go to _Edit ‣ Preferences ‣ Add-ons ‣ Install..._
+and select the file you just saved.
+Enable the addon by clicking the checkbox
+next to "Import: MelonRipper NDS Dumps" in the addon list
+(use the search box to find it).
+See the
+[Blender Manual](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons)
+or
+[this question](https://blender.stackexchange.com/questions/1688/installing-an-addon/1689)
+for more help installing addons.
 
 Then go to _File ‣ Import ‣ MelonRipper NDS Dump_
 and pick the `.dump` file you ripped with melonDS
 to import it.
 
 
-## Tips and other stuff to know
+## Tips & Tricks
 
-* If the colors are washed out, you probably need to
-  switch Blender's color space from "Filmic" to "Standard".
+* If the colors are washed out,
+  try switching Blender's color space from "Filmic" to "Standard".
   See [this answer](https://blender.stackexchange.com/questions/164677/images-as-emitters-constantly-come-out-dull-white-emission-not-actually-white).
-  (btw I recommend saving this change to your startup file.)
 
-* If you're having trouble finding the model in Blender,
-  try _View ‣ Frame Selected_ in the 3D View
-  to fit the selected model into the viewport.
-  Walk mode is also useful for navigation.
+* If you're having trouble finding the model in the viewport,
+  try _View ‣ Frame Selected_.
 
 * Sometimes different parts of the scene are
   displaced relative to each other.
@@ -82,7 +84,7 @@ to import it.
   but before the Projection.)
 
 * Normals aren't ripped.
-  The calculated lighting from normals is baked into the vertex colors.
+  The calculated lighting is baked into the vertex colors.
 
 * Strip connectivity is not preserved.
   All faces in Blender are totally separate from each other,
@@ -99,9 +101,8 @@ to import it.
   This may have sorting problems in the Eevee renderer.
   If you have sorting issues, try Cycles.
 
-* The material nodes are supposed to simulate a DS pixel pipeline.
-  Implemented effects: texturing, modulate, decal, toon, texcoord wrapping.
-  Unimplemented: fog, shadow, wireframe, edgemarking, depth equal, rear plane.
+* Some DS effects aren't implemented:
+  fog, highlight, shadow, wireframe, edgemarking, depth equal, rear plane.
 
 * Exporting to .gltf sort of works (use Blender ≥2.92 for best results).
   You will probably need to modify the materials to export to other formats.
