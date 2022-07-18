@@ -18,6 +18,7 @@ bl_info = {
 }
 
 import bpy
+import os
 import struct
 import time
 
@@ -95,13 +96,15 @@ TOON_INDEX_TABLE = [
 
 
 def import_rip(filepath):
+    name = os.path.basename(filepath).removesuffix('.dump')
+
     with open(filepath, 'rb') as f:
         dump = f.read()
 
     rip = Rip(dump)
     rip.parse()
 
-    importer = Importer("MelonRip", rip)
+    importer = Importer(name, rip)
     importer.create_blender_objects()
 
 
