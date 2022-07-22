@@ -96,7 +96,9 @@ TOON_INDEX_TABLE = [
 
 
 def import_rip(filepath):
-    name = os.path.basename(filepath).removesuffix('.dump')
+    name = os.path.basename(filepath)
+    if name.endswith('.dump'):
+        name = name[:-len('.dump')]  # remove suffix
 
     with open(filepath, 'rb') as f:
         dump = f.read()
@@ -126,7 +128,7 @@ class Rip:
         if not magic.startswith(prefix):
             raise ShowErrorMsg('Not a MelonRipper file')
 
-        version = magic.removeprefix(prefix)
+        version = magic[len(prefix):]  # remove prefix
         try:
             version = int(str(version, encoding='ascii'))
         except ValueError:
