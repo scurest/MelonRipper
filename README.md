@@ -46,7 +46,8 @@ in the current directory.
 
 ### Blender
 
-Blender 2.82 or later is required.
+Blender 2.82+ is required.
+Last tested with Blender 3.5.
 
 To install the addon, open
 [`import_melon_rip.py`](https://raw.githubusercontent.com/scurest/MelonRipper/master/import_melon_rip.py)
